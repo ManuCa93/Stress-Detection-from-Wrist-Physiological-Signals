@@ -12,8 +12,54 @@ def load_subject_data(DATA_PATH, subject_id):
     return data
 
 # === Windowing function ===
-def create_windows(subject_data, window_size_sec, window_shift_sec, LABEL_SAMPLING_RATE, WRIST_SAMPLING_RATES, VALID_LABELS):
-    """Segment wrist signals into sliding time windows."""
+# def create_windows(subject_data, window_size_sec, window_shift_sec, LABEL_SAMPLING_RATE, WRIST_SAMPLING_RATES, VALID_LABELS):
+#     """Segment wrist signals into sliding time windows."""
+#     labels = subject_data['label'].flatten()
+#     wrist = subject_data['signal']['wrist']
+
+#     total_duration = len(labels) / LABEL_SAMPLING_RATE
+#     n_windows = int((total_duration - window_size_sec) // window_shift_sec) + 1
+
+#     windows = []
+#     window_labels = []
+
+#     for i in range(n_windows):
+#         # Majority vote for window label
+#         l_start = int(i * window_shift_sec * LABEL_SAMPLING_RATE)
+#         l_end = int((i * window_shift_sec + window_size_sec) * LABEL_SAMPLING_RATE)
+#         seg = labels[l_start:l_end]
+#         if len(seg) == 0:
+#             continue
+            
+#         unique_l, counts_l = np.unique(seg, return_counts=True)
+#         majority = int(unique_l[np.argmax(counts_l)])
+
+#         if majority not in VALID_LABELS:
+#             continue
+#         if np.max(counts_l) / len(seg) < 0.8:
+#             continue
+
+#         # Extract signals at native rates
+#         window_data = {}
+#         valid = True
+#         for sig_name, sr in WRIST_SAMPLING_RATES.items():
+#             s_start = int(i * window_shift_sec * sr)
+#             s_end = int((i * window_shift_sec + window_size_sec) * sr)
+#             if s_end <= len(wrist[sig_name]):
+#                 window_data[sig_name] = wrist[sig_name][s_start:s_end]
+#             else:
+#                 valid = False
+#                 break
+
+#         if valid:
+#             windows.append(window_data)
+#             window_labels.append(majority)
+
+#     return windows, np.array(window_labels)
+
+# Modifica alla funzione create_windows per includere il preprocessing
+def create_windows(subject_data, window_size_sec, window_shift_sec, LABEL_SAMPLING_RATE, WRIST_SAMPLING_RATES, VALID_LABELS, apply_filters=True):
+    """Segment wrist signals into sliding time windows and apply preprocessing."""
     labels = subject_data['label'].flatten()
     wrist = subject_data['signal']['wrist']
 
@@ -24,38 +70,63 @@ def create_windows(subject_data, window_size_sec, window_shift_sec, LABEL_SAMPLI
     window_labels = []
 
     for i in range(n_windows):
-        # Majority vote for window label
         l_start = int(i * window_shift_sec * LABEL_SAMPLING_RATE)
         l_end = int((i * window_shift_sec + window_size_sec) * LABEL_SAMPLING_RATE)
         seg = labels[l_start:l_end]
-        if len(seg) == 0:
-            continue
+        
+        if len(seg) == 0: continue
             
         unique_l, counts_l = np.unique(seg, return_counts=True)
         majority = int(unique_l[np.argmax(counts_l)])
 
-        if majority not in VALID_LABELS:
-            continue
-        if np.max(counts_l) / len(seg) < 0.8:
+        # Filtro label e stabilità della finestra (80% stessa label)
+        if majority not in VALID_LABELS or np.max(counts_l) / len(seg) < 0.8:
             continue
 
-        # Extract signals at native rates
         window_data = {}
         valid = True
         for sig_name, sr in WRIST_SAMPLING_RATES.items():
             s_start = int(i * window_shift_sec * sr)
             s_end = int((i * window_shift_sec + window_size_sec) * sr)
+            
             if s_end <= len(wrist[sig_name]):
-                window_data[sig_name] = wrist[sig_name][s_start:s_end]
+                sig_segment = wrist[sig_name][s_start:s_end]
+                
+                if sig_name != 'ACC':
+                    sig_segment = sig_segment.flatten()
+                
+                if apply_filters:
+                    if sig_name == 'BVP':
+                        sig_segment = butter_bandpass_filter(sig_segment, 0.5, 8.0, sr)
+                    elif sig_name == 'EDA':
+                        sig_segment = butter_lowpass_filter(sig_segment, 1.0, sr)
+                
+                window_data[sig_name] = sig_segment
             else:
                 valid = False
                 break
 
+        # OUTLIER REMOVAL (Controllo qualità sensori)
         if valid:
+            # Se la temperatura è troppo bassa (<25°C), il sensore non era a contatto
+            if np.mean(window_data['TEMP']) < 25.0:
+                continue
+            
             windows.append(window_data)
             window_labels.append(majority)
 
     return windows, np.array(window_labels)
+
+# Aggiungo anche una funzione per la Normalizzazione (da usare dopo l'estrazione feature)
+def normalize_features_by_subject(df, feature_cols):
+    """Applica Standard Scaling per ogni soggetto per gestire la variabilità individuale."""
+    from sklearn.preprocessing import StandardScaler
+    df_norm = df.copy()
+    for sid in df_norm['subject_id'].unique():
+        mask = df_norm['subject_id'] == sid
+        scaler = StandardScaler()
+        df_norm.loc[mask, feature_cols] = scaler.fit_transform(df_norm.loc[mask, feature_cols])
+    return df_norm
 
 
 def butter_lowpass_filter(data, cutoff, fs, order=4):
@@ -154,4 +225,6 @@ def extract_window_features(window_data, WRIST_SAMPLING_RATES):
     feats.update(stat_features(temp, 'TEMP'))
 
     return feats
+
+
 
