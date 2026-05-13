@@ -1,216 +1,225 @@
-PROJECT INSTRUCTIONS:
+# Stress Detection from Wrist Physiological Signals
 
-You have methodologies basic instruction, as a starting base
-• Bonus is considered any amelioration, new personal approach added. 
-• You should demonstrate a clear knowledge of the data and related 
-problematics
-• For all projects you should answer: can you apply more advanced AI 
-techniques? 
-• Please use the Journal club checklist integrating it in your project
-• SoA analysis, comments and personal critical consideration related to data 
-access, data quality, explainability, ethical, GDPR, etc. and other
-considerations about challenges of applying AI in Healthcare, are expected in 
-all projects.
-• Use Python
+A machine learning pipeline for detecting psychological stress using wrist-worn sensor data from the **WESAD** (Wearable Stress and Affect Detection) dataset. The project covers the full lifecycle — signal preprocessing, feature engineering, model training, evaluation, explainability, and critical discussion.
 
-Objective:
-The goal of this project is to develop machine learning models to predict stress conditions from physiological signals collected using wearable devices. The task can be formulated either as a binary classification problem (stress vs. non-stress) or as a multi-class problem (e.g., baseline, stress, amusement). The project focuses on understanding how physiological signals measured at the wrist can be used to detect affective states.
+---
 
-Suggested Methodology:
+## Table of Contents
 
-Data exploration and preprocessing: Load and inspect physiological signals (e.g., BVP, EDA, temperature) 
-Select only data acquired from the wrist-worn device (MUST)(Empatica E4) Apply preprocessing (e.g., filtering, normalization, artifact removal)
-Segment the data into time windows suitable for analysis 
+- [Overview](#overview)
+- [Dataset](#dataset)
+- [Project Structure](#project-structure)
+- [Pipeline Summary](#pipeline-summary)
+- [Results](#results)
+- [Requirements](#requirements)
+- [Usage](#usage)
+- [Key Design Decisions](#key-design-decisions)
+- [Limitations & Future Work](#limitations--future-work)
 
-Feature extraction / representation: Extract relevant features from physiological 
-signals (e.g., statistical, temporal, and frequency-based features) 
-Optionally use established libraries (e.g., FLIRT, NeuroKit) or develop a custom feature 
-extraction pipeline Analyze feature relevance and variability across subjects 
+---
 
-Model development: Implement classification models using approaches different from 
-those proposed in the original study Compare multiple methods (e.g., logistic regression, 
-support vector machines, tree-based models, or neural networks) Explore both binary 
-and multi-class formulations of the problem 
+## Overview
 
-Validation strategy:
-MUST Implement a leave-one-subject-out cross-validation scheme to ensure subject-independent evaluation 
-Analyze how model performance generalizes across individuals 
+This project trains and evaluates four machine learning classifiers (Logistic Regression, SVM with RBF kernel, Gradient Boosting, and MLP) on physiological signals recorded from a wrist-worn Empatica E4 device. Both binary classification (Stress vs. Non-Stress) and 3-class classification (Baseline / Stress / Amusement) are explored.
 
-Model evaluation: Evaluate performance using metrics such as accuracy, confusion 
-matrix, precision, recall, F1-score, and ROC curves 
-Compare models and analyze strengths and limitations 
+Models are evaluated using **Leave-One-Subject-Out (LOSO) cross-validation** — the gold standard for subject-independent wearable sensing research — ensuring no data from the test subject is present during training.
 
-Extension (optional): Investigate personalization vs. general models Explore feature 
-selection or dimensionality reduction Study robustness to noise and inter-subject 
-variability 
+---
 
-! You must use only the data coming from the wrist device (Empatica E4) discarding the signals collected at the level of the chest with the Respiban device. You must use different models than those proposed in the original paper.
+## Dataset
 
------
+**WESAD** — Wearable Stress and Affect Detection  
+Schmidt et al., ACM ICMI 2018 | UCI ML Repository
 
+- 15 subjects (S2–S17; S1 and S12 excluded due to sensor malfunction)
+- Wrist device: **Empatica E4** — ACC (32 Hz), BVP (64 Hz), EDA (4 Hz), TEMP (4 Hz)
+- Labels recorded at 700 Hz via a standardized protocol:
+  - `1` → Baseline (neutral, reading magazines)
+  - `2` → Stress (Trier Social Stress Test: public speaking + mental arithmetic)
+  - `3` → Amusement (funny video clips)
+- Data files: one `.pkl` file per subject, available from the [WESAD website](https://archive.ics.uci.edu/dataset/465/wesad)
 
-WESAD Dataset: WEarable Stress and Affect Detection
+Place the dataset in a folder named `WESAD/` at the project root, with the structure:
+```
+WESAD/
+  S2/S2.pkl
+  S3/S3.pkl
+  ...
+  S17/S17.pkl
+```
 
-I. General information
-Contact persons: Philip Schmidt and Attila Reiss, contact at: firstname.lastname@de.bosch.com.
-If you publish material based on this dataset, please reference the publication [1].
+---
 
-I.1. Dataset structure
-The dataset is organised so that each subject has a folder (SX, where X = subject ID). Each subject
-folder contains the following files:
-- SX_readme.txt: contains information about the subject (SX) and information about data collection
-and data quality (if applicable)
-- SX_quest.csv: contains all relevant information to obtain ground truth, including the protocol
-schedule for SX and answers to the self-report questionnaires; see details below
-- SX_respiban.txt: contains data from the RespiBAN device; see details below
-- SX_E4_Data.zip: contains data from the Empatica E4 device; see details below
-- SX.pkl: contains synchronised data and labels; see details below
+## Project Structure
 
-I.2. Subjects
-17 subjects participated in the study. However, due to sensor malfunction, data of two subjects (S1
-and S12) had to be discarded. Thus, the respective folders are missing in WESAD. Information on
-each subject can be found in SX_readme.txt, in the respective subject’s folder. Please refer to [1] for
-overall information on the subjects (see Section 3.1 there).
+```
+.
+├── notebook.ipynb       # Main analysis notebook (all sections)
+├── functions.py         # Helper functions (loading, windowing, filtering, features)
+├── WESAD/               # Dataset directory (not included in repo)
+├── explain.md           # Full in-depth explanation of every method used
+└── README.md            # This file
+```
 
-II. Data format
-Raw sensor data was recorded with two devices: a chest-worn device (RespiBAN) and a wrist-worn
-device (Empatica E4). The study protocol labels (see Section III.1 below) are synchronised with the
-RespiBAN raw data (same start time). However, the RespiBAN and the Empatica E4 data need to be
-manually synchronised. Subjects performed a double tapping gesture with their non-dominant hand
-(where they wore the E4) on their chest. The resulting characteristic pattern in the acceleration
-signal can be used for synchronising the two devices’ data. Moreover, the dataset also includes the
-file SX.pkl, which includes synchronised raw sensor data and labels, see details in Section II.3 below.
+---
 
-II.1. Data from RespiBAN
-The RespiBAN Professional was used: http://www.biosignalsplux.com/en/respiban-professional.
-Please refer to [1] for details on sensor placement (see Section 3.2 there). All signals were sampled
-at 700 Hz. Raw data is contained in SX_respiban.txt. There are 10 columns here. First column:
-sequential line number. Second column: ignore. Columns 3-10: raw data of the 8 sensor channels.
-The order of the channels is defined in the header. The entries “XYZ” refer to the 3-channel
-accelerometer (thus, acceleration data is provided in 3 columns).
-In order to convert the raw sensor values into SI units, each channel has to transformed based on
-the formulas given below (signal contains the raw sensor values, vcc=3, chan_bit=2^16).
-- ECG (mV): ((signal/chan_bit-0.5)*vcc)
-Details: http://www.biosignalsplux.com/datasheets/ECG_Sensor_Datasheet.pdf
-- EDA (μS): (((signal/chan_bit)*vcc)/0.12)
-Details: http://www.biosignalsplux.com/datasheets/EDA_Sensor_Datasheet.pdf
-- EMG (mV): ((signal/chan_bit-0.5)*vcc)
-Details: http://www.biosignalsplux.com/datasheets/EMG_Sensor_Datasheet.pdf
-- TEMP (°C):
-vout = (signal*vcc)/(chan_bit-1.)
-rntc = ((10^4)*vout)/(vcc-vout)
-- 273.15 + 1./(1.12764514*(10^(-3)) + 2.34282709*(10^(-4))*log(rntc) +
-+ 8.77303013*(10^(-8))*(log(rntc)^3))
-Details: http://www.biosignalsplux.com/datasheets/TMP_Sensor_Datasheet.pdf
-- XYZ (g): (signal-Cmin)/(Cmax-Cmin)*2-1, where Cmin = 28000 and Cmax = 38000
-Details: http://www.biosignalsplux.com/datasheets/ACC_Sensor_Datasheet.pdf
-- RESPIRATION (%): (signal / chan_bit - 0.5) * 100
-Details: http://www.biosignalsplux.com/datasheets/PZT_Sensor_Datasheet.pdf
+## Pipeline Summary
 
-II.2. Data from Empatica E4
-The Empatica E4 was used: http://www.empatica.com/research/e4/. The E4 device was worn on the
-subjects’ non-dominant wrist. Sampling rate of the different sensors was different, see below. Raw
-data is contained in SX_E4_Data.zip. When unzipped, the following files contain derived information
-and thus should be ignored in this dataset: HR.csv, IBI.csv, tags.csv. The file info.txt contains some
-details on the folder’s content. Raw data from the E4 device is contained in the following files (in
-each file, first line refers to the sensor channel’s global timestamp at start, second line refers to the
-sensor channel’s sampling rate):
-- ACC.csv: sampled at 32 Hz. The 3 data columns refer to the 3 accelerometer channels. Data
-is provided in units of 1/64g.
-- BVP.csv: sampled at 64 Hz. Data from photoplethysmograph (PPG).
-- EDA.csv: sampled at 4 Hz. Data is provided in μS.
-- TEMP.csv: sampled at 4 Hz. Data is provided in °C.
+### 1. Data Loading
+Raw `.pkl` files are loaded per subject. Only wrist signals are retained; chest-strap data is discarded.
 
-II.3. Synchronised data
-The double-tap signal pattern was used to manually synchronise the two devices’ raw data. The
-result is provided in the files SX.pkl, one file per subject. This file is a dictionary, with the following
-keys:
-- ‘subject’: SX, the subject ID
-- ‘signal’: includes all the raw data, in two fields:
-o ‘chest’: RespiBAN data (all the modalities: ACC, ECG, EDA, EMG, RESP, TEMP)
-o ‘wrist’: Empatica E4 data (all the modalities: ACC, BVP, EDA, TEMP)
-- ‘label’: ID of the respective study protocol condition, sampled at 700 Hz. The following IDs
-are provided: 0 = not defined / transient, 1 = baseline, 2 = stress, 3 = amusement,
-4 = meditation, 5/6/7 = should be ignored in this dataset
+### 2. Preprocessing & Windowing
+Signals are segmented into **30-second sliding windows** with a **5-second shift**. Each window is labeled by majority vote from the 700 Hz label stream (≥80% label purity required). Quality control removes windows where mean skin temperature < 25°C (sensor not in contact).
 
-III. Ground truth
-All relevant information can be found in SX_quest.csv, where X = subject ID. One can use either the
-study protocol conditions as labels, or the answers to the self-report questionnaires.
+Signal filters applied inside each window:
+- **BVP:** 4th-order Butterworth bandpass filter (0.5–8.0 Hz) — isolates cardiac frequency band
+- **EDA:** 4th-order Butterworth lowpass filter (≤1.0 Hz) — removes high-frequency noise while preserving skin conductance responses
 
-III.1. Study protocol
-The order of the different conditions is defined on the second line in SX_quest.csv. Please refer to [1]
-for further details on each of the conditions (see Section 3.3 there). Please ignore the elements
-“bRead”, “fRead”, and “sRead”: these are not relevant for this dataset.
-The time interval of each condition is defined as start and end time, see the lines 3 and 4 in
-SX_quest.csv. Time is given in the format [minutes.seconds]. Time is counted from the start of the
-RespiBAN device’s start of recording.
+All filters use zero-phase `filtfilt` to avoid temporal distortion.
 
-III.2. Self-report questionnaires
-Within the study protocol, after each of the five defined conditions (baseline, amusement, stress,
-meditation 1, meditation 2), the subjects were asked to fill in a self-report. The self-reports consist of
-the following questionnaires: PANAS, shortened STAI, SAM (Self-Assessment Manikins, for valence
-and arousal). Answers are provided on the respective lines in SX_quest.csv. The order of the
-questionnaires (e.g. the five PANAS-questionnaire lines) is the same as the order of the different
-conditions. Additionally, after the stress condition, a shortened SSSQ-questionnaire is filled in by the
-subjects, see the last line in SX_quest.csv. Please refer to [1] for further details on the self-report
-questionnaires (see Section 3.4 there).
-In the following, the items of each questionnaire are listed, in the order as stored in SX_quest.csv.
-For each questionnaire, the answering options are given as well. Considering the PANAS-
-questionnaire, four items (Stressed, Frustrated, Happy, Sad) were added by us, see explanation in
-[1]. These items were scored by the subjects using the same scale as all other PANAS items.
-Considering the SSSQ-questionnaire: this consists of nine items, but the first three items (Annoyed,
-Angry, Irritated) are included in the PANAS-questionnaire. The item Annoyed is by default part of
-PANAS, while the items Angry and Irritated (in brackets below) are only asked after the stress
-condition, since only relevant for the SSSQ.
-PANAS questionnaire items (1 = Not at all, 2 = A little bit, 3 = Somewhat, 4 = Very much,
-5 = Extremely)
-- Active
-- Distressed
-- Interested
-- Inspired
-- Annoyed
-- Strong
-- Guilty
-- Scared
-- Hostile
-- Excited
-- Proud
-- Irritable
-- Enthusiastic
-- Ashamed
-- Alert
-- Nervous
-- Determined
-- Attentive
-- Jittery
-- Afraid
-- Stressed
-- Frustrated
-- Happy
-- (Angry)
-- (Irritated)
-- Sad
-STAI questionnaire items (1 = Not at all, 2 = Somewhat, 3 = Moderately so, 4 = Very much so)
-- I feel at ease
-- I feel nervous
-- I am jittery
-- I am relaxed
-- I am worried
-- I feel pleasant
-SAM questionnaire items (scale 1-9)
-- Valence (1 = low valence, 9 = high valence)
-- Arousal (1 = low arousal, 9 = high arousal)
-SSSQ questionnaire items (1 = Not at all, 2 = A little bit, 3 = Somewhat, 4 = Very much,
-5 = Extremely):
-- I was committed to attaining my performance goals
-- I wanted to succeed on the task
-- I was motivated to do the task
-- I reflected about myself
-- I was worried about what other people think of me
-- I felt concerned about the impression I was making
+### 3. Feature Extraction (107 features total)
 
-References
-[1] Philip Schmidt, Attila Reiss, Robert Duerichen, Claus Marberger and Kristof Van Laerhoven. 2018.
-Introducing WESAD, a multimodal dataset for Wearable Stress and Affect Detection. In 2018
-International Conference on Multimodal Interaction (ICMI ’18), October 16–20, 2018, Boulder, CO,
-USA. ACM, New York, NY, USA, 9 pages. https://doi.org/10.1145/3242969.3242985
+| Signal | Features |
+|--------|----------|
+| ACC (x, y, z + magnitude) | 11 statistical + 3 frequency features × 4 = 56 |
+| BVP | 11 statistical + 3 frequency = 14 |
+| EDA | 11 statistical + 3 frequency + 4 EDA-specific = 18 |
+| TEMP | 11 statistical = 11 |
+| HRV (from BVP peaks) | MeanHR, SDNN, RMSSD, pNN50, n_beats, LF, HF, LF/HF = 8 |
+
+Statistical features: mean, std, min, max, median, range, skewness, kurtosis, RMS, MAD, SAD  
+Frequency features (Welch PSD): total power, dominant frequency, spectral entropy
+
+### 4. Cross-Validation
+Leave-One-Subject-Out (LOSO) — 15 folds, each training on 14 subjects and testing on 1. Per-fold imputation (median) and scaling (StandardScaler) are applied strictly to training data to prevent leakage.
+
+### 5. Models
+- Logistic Regression (`class_weight='balanced'`)
+- SVM with RBF kernel (`C=10`, `gamma='scale'`)
+- Gradient Boosting (`n_estimators=100`, `max_depth=5`, `lr=0.1`)
+- MLP (`hidden_layers=(128, 64)`, early stopping)
+
+### 6. Stacking Ensemble
+A Logistic Regression meta-model is trained on the LOSO probability outputs of all four base models, also evaluated via LOSO.
+
+### 7. Explainability
+- Gradient Boosting feature importances
+- SHAP TreeExplainer (for GB) and KernelExplainer (for stacking ensemble)
+- Subject variability plots for top features
+
+### 8. Advanced Extensions
+- **RFE:** Recursive Feature Elimination selects 15 features per LOSO fold (leak-free)
+- **Noise Robustness:** Gaussian noise added to test features at σ = 0–0.50
+- **Subject Gap:** General LOSO model vs. personalized within-subject model
+- **Conceptual LSTM:** TensorFlow/Keras architecture for future deep learning extension
+
+---
+
+## Results
+
+### Binary Classification (Stress vs. Non-Stress)
+
+| Model | Accuracy | Precision | Recall | F1-Score |
+|---|---|---|---|---|
+| Logistic Regression | 0.9035 | 0.8366 | 0.8426 | 0.8396 |
+| SVM (RBF) | 0.8781 | 0.8238 | 0.7549 | 0.7878 |
+| Gradient Boosting | 0.8950 | 0.8491 | 0.7900 | 0.8185 |
+| **MLP** | **0.9092** | **0.8747** | **0.8137** | **0.8431** |
+| Stacking Ensemble | 0.8989 | 0.8003 | 0.8829 | 0.8395 |
+
+### 3-Class Classification (Macro-Averaged)
+
+| Model | Accuracy | Macro F1 |
+|---|---|---|
+| Logistic Regression | 0.6975 | 0.6467 |
+| SVM (RBF) | 0.7464 | 0.6710 |
+| Gradient Boosting | 0.7598 | 0.6459 |
+| MLP | 0.7643 | 0.6736 |
+
+The **Amusement** class is the primary source of error in 3-class mode (~0.34 F1). Both Stress and Amusement produce high sympathetic arousal; distinguishing them reliably requires respiration data (unavailable from the wrist device alone).
+
+### RFE & Noise Results
+
+| Experiment | F1-Score |
+|---|---|
+| GB with all 107 features | 0.8185 |
+| GB with top 15 features (RFE, leak-free) | 0.8289 |
+| GB at σ=0.10 noise | 0.8506 |
+| GB at σ=0.50 noise | 0.7936 |
+
+### Subject Gap
+
+| Evaluation | F1-Score |
+|---|---|
+| General model (LOSO) | ~0.82 |
+| Personalized model (within-subject 5-fold) | ~0.99 |
+
+Note: the personalized result is inflated by window overlap leakage and should be interpreted with caution.
+
+---
+
+## Requirements
+
+```
+numpy
+pandas
+scipy
+scikit-learn
+matplotlib
+seaborn
+shap
+tensorflow   # optional, for the conceptual LSTM cell only
+```
+
+Install with:
+
+```bash
+pip install numpy pandas scipy scikit-learn matplotlib seaborn shap tensorflow
+```
+
+---
+
+## Usage
+
+1. Download the WESAD dataset and place it in the `WESAD/` directory.
+2. Install dependencies.
+3. Run the notebook from top to bottom:
+
+```bash
+jupyter notebook notebook.ipynb
+```
+
+The notebook is self-contained and follows a linear execution order. All helper functions are imported from `functions.py`, which must be in the same directory.
+
+---
+
+## Key Design Decisions
+
+**Why wrist-only?** Chest-strap devices (like the Respiban used in WESAD) provide higher signal quality but are impractical for everyday use. Wrist-worn devices like the Empatica E4 are the form factor used in consumer smartwatches, making wrist-only classification more ecologically relevant.
+
+**Why LOSO?** Standard K-fold cross-validation applied to sliding-window physiological data suffers from two problems: adjacent windows overlap by 83%, and within-subject windows are correlated by definition. LOSO is the only validation strategy that produces an unbiased estimate of cross-subject generalization.
+
+**Why binary over 3-class?** The binary formulation (Stress vs. Non-Stress) is more actionable in practice and more reliably solvable with wrist sensors. The Amusement class is physiologically ambiguous without respiration data, making 3-class classification significantly harder.
+
+**Why `class_weight='balanced'`?** The dataset contains ~2.3× more Non-Stress than Stress windows. Without correction, models are incentivized to predict Non-Stress indiscriminately. Balanced class weights rescale the loss function so each class contributes equally during training.
+
+**Why impute inside the fold?** Fitting the imputer on the full dataset before cross-validation would allow test-set statistics (medians) to influence training. Fitting inside each fold ensures the imputation is learned only from training data.
+
+---
+
+## Limitations & Future Work
+
+- **Wrist vs. chest modality gap:** Including respiration rate would dramatically improve 3-class accuracy, particularly for the Amusement class.
+- **Homogeneous cohort:** All participants are healthy university students. Generalization to clinical populations, elderly users, or users with cardiovascular conditions is unvalidated.
+- **Lab vs. real-world:** TPSS-induced stress differs from naturalistic chronic stress. Ecological validity requires field studies.
+- **Window overlap leakage:** The "personalized model" evaluation is confounded by the 83% overlap between adjacent windows. Chronological block splits are needed for a fair personalized assessment.
+- **Deep learning:** 1D-CNNs or LSTMs applied to raw signals could bypass hand-crafted features and achieve F1 > 0.90, as demonstrated in recent literature.
+- **Domain adaptation:** Techniques like DANN could reduce inter-subject variance and narrow the Subject Gap without requiring per-user calibration.
+
+---
+
+## References
+
+Schmidt, P., Reiss, A., Duerichen, R., Marberger, C., & Van Laerhoven, K. (2018). *Introducing WESAD, a Multimodal Dataset for Wearable Stress and Affect Detection*. ACM ICMI 2018.
+
+Sarkar, P., & Etemad, A. (2020). *Self-supervised ECG Representation Learning for Emotion Recognition*. IEEE TAFFC.
